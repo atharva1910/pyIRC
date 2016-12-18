@@ -1,7 +1,29 @@
 import socket
 import sys
-import main as client
+import threading
 
+
+# -------------------- #
+#   GLOBAL VARIABLES
+# -------------------- #
+
+userDict = {}
+threads = []
+port = 8080
+host = ""
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Reuse the same port without waiting for the OS
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+try:
+    sock.bind((host, port))
+except socket.error:
+    print("Socket bind error")
+    sys.exit()
+
+
+# -------------------- #
+# Function declarations
+# -------------------- #
 
 def sendData(data):
     print(sock)
@@ -9,21 +31,26 @@ def sendData(data):
 
 
 def userAppend(connID, nick):
-    updateAll(connID, nick)
-    userDict[connID] = nick
+    print("Updating Dictionary")
+    userDict[nick] = connID
 
 
-def userDel(self, connID):
-    del self.userDict[connID]
+def printDict():
+    for i in userDict.keys():
+        print(i, userDict[i])
 
 
-def updateAll(self, connID, nick):
+def userDel(connID):
+    del userDict[connID]
+
+
+def updateAll():
     """
         Send the new connID and nick to all the users
-        """
-    message = "UPDATE: "+str(connID) + " " + str(nick)
-    for key in self.userDict.items():
-        self.sock.send(key, message.encode("utf-8"))
+    """
+    message = "HEllO"
+    for key in userDict.values():
+        key.send(message.encode("utf-8"))
 
 
 def delAll(self, connID, nick):
@@ -31,19 +58,69 @@ def delAll(self, connID, nick):
     for key in self.userDict.items():
         self.sock.send(key, message.encode("utf-8"))
 
+# ------------------------- #
+#      Client class
+# ------------------------- #
 
-if __name__ == "__main__":
-    userDict = {}
-    port = 8080
-    host = ""
-    userDict = {}
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+class connection(threading.Thread):
+
+    def __init__(self, conn, addr):
+        threading.Thread.__init__(self)
+        self.conn = conn
+        self.dict = {}
+        self.addr = addr
+        self.nick = None
+        self.user = None
+
+    def run(self):
+        print("new Thread")
+        while(True):
+            data = self.conn.recv(2048).decode('utf-8')
+
+            if data.rstrip(" ") == "":
+                continue
+
+            if data.rstrip('\r\n') == ":quit":
+                self.clean()
+                break
+
+            if len(data.split()) == 4 and data.split()[0] == ":USER":
+                self.user = data.split()[1].rstrip('\r\n')
+                if data.split()[2] == ":NICK":
+                    self.nick = data.split()[3].rstrip('\r\n')
+                userAppend(self.conn, self.nick)
+                message = "{} has joined the room\n".format(self.nick)
+                self.dataSend(message)
+
+            if (not self.nick or not self.user):
+                message = "Enter username and nick please\nUSAGE ->"\
+                          ":USER <username> :NICK <nickname> \n"
+                self.dataSend(message)
+                continue
+
+            if data.split()[0] == ":USER":
+                self.user = data.split()[1].rstrip('\r\n')
+
+            if data.split()[0] == ":SENDALL":
+                updateAll()
+
+            print(data.rstrip('\r\n'))
+
+    def dataSend(self, data):
+        self.conn.send(data.encode("utf-8"))
+
+    def clean(self):
+        print("Quitting")
+        self.conn.close()
+
+
+while(True):
     try:
-        sock.bind((host, port))
-    except socket.error:
-        print("Socket bind error")
-        sys.exit()
-    sock.listen(1000)
-    conn, addr = sock.accept()
-    child = client.connection(conn, addr)
-    sock.close()
+        sock.listen(10)
+        conn, addr = sock.accept()
+        child = connection(conn, addr)
+        child.start()
+        threads.append(child)
+    except KeyboardInterrupt:
+        sock.close()
