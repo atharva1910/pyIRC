@@ -8,7 +8,6 @@ import threading
 # -------------------- #
 
 userDict = {}
-threads = []
 port = 8080
 host = ""
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -32,7 +31,6 @@ def sendData(data):
 
 
 def userAppend(connID, nick):
-    print("Updating Dictionary")
     userDict[nick] = connID
 
 
@@ -45,19 +43,12 @@ def userDel(connID):
     del userDict[connID]
 
 
-def updateAll():
-    """
-        Send the new connID and nick to all the users
-    """
-    message = "HEllO\n"
-    for key in userDict.values():
-        key.send(message.encode("utf-8"))
-
-
-def delAll(self, connID, nick):
-    message = "DELETE: " + str(connID)
-    for key in self.userDict.items():
-        self.sock.send(key, message.encode("utf-8"))
+def sendAll(nick, message):
+    for key in userDict.keys():
+        if key == nick:
+            continue
+        else:
+            userDict[key].send(message.encode("utf-8"))
 
 
 # ------------------------- #
@@ -92,13 +83,13 @@ class connection(threading.Thread):
                 if data.split()[0] == ":USER" and data.split()[2] == ":NICK":
                     self.user = data.split()[1].rstrip('\r\n')
                     self.nick = data.split()[3].rstrip('\r\n')
-                self.lock.acquire()
-                try:
-                    userAppend(self.conn, self.nick)
-                finally:
-                    self.lock.release()
-                message = "{} has joined the room\n".format(self.nick)
-                self.dataSend(message)
+                    message = "{} has joined the room\n".format(self.nick)
+                    sendAll(self.nick, message)
+                    self.lock.acquire()
+                    try:
+                        userAppend(self.conn, self.nick)
+                    finally:
+                        self.lock.release()
 
             if (not self.nick or not self.user):
                 message = "Enter username and nick please\nUSAGE ->"\
@@ -112,7 +103,7 @@ class connection(threading.Thread):
             if data.split()[0] == ":SENDALL":
                 self.lock.acquire()
                 try:
-                    updateAll()
+                    sendAll(self.nick)
                 finally:
                     self.lock.release()
 
@@ -132,6 +123,5 @@ while(True):
         conn, addr = sock.accept()
         child = connection(conn, addr, lock)
         child.start()
-        threads.append(child)
     except KeyboardInterrupt:
         sock.close()
