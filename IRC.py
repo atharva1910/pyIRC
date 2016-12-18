@@ -7,11 +7,16 @@ import threading
 #   GLOBAL VARIABLES
 # -------------------- #
 
+# contains the information about all the users and their ID
+# key = nickname
+# value = conn socket
 userDict = {}
+
 port = 8080
 host = ""
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 lock = threading.Lock()
+
 # Reuse the same port without waiting for the OS
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
@@ -25,25 +30,24 @@ except socket.error:
 # Function declarations
 # -------------------- #
 
-def sendData(data):
-    print(sock)
-    sock.send(data)
-
-
 def userAppend(connID, nick):
     userDict[nick] = connID
 
 
+def userDel(nick):
+    del userDict[nick]
+
+
+# for debugging
 def printDict():
     for i in userDict.keys():
         print(i, userDict[i])
 
 
-def userDel(connID):
-    del userDict[connID]
-
-
 def sendAll(nick, message):
+    """
+    Relays the messages to all the users.
+    """
     for key in userDict.keys():
         if key == nick:
             continue
@@ -68,7 +72,11 @@ class connection(threading.Thread):
         self.user = None
 
     def run(self):
-        print("new Thread")
+        """
+        The meat of the program,the client recieves messages
+        and performs operation based on the messages
+        Commands for the server start with ":"
+        """
         while(True):
             data = self.conn.recv(2048).decode('utf-8')
 
@@ -76,7 +84,7 @@ class connection(threading.Thread):
                 continue
 
             if data.rstrip('\r\n') == ":quit":
-                self.clean()
+                self.clean(self.nick)
                 break
 
             if len(data.split()) == 4:
@@ -112,8 +120,15 @@ class connection(threading.Thread):
     def dataSend(self, data):
         self.conn.send(data.encode("utf-8"))
 
-    def clean(self):
-        print("Quitting")
+    def clean(self, nick=None):
+        """
+        Delete the user in the dictionary and send message
+        to all user that this nick has left
+        """
+        if nick:
+            message = "{} has left the channel\n".format(nick)
+            userDel(nick)
+            sendAll(nick, message)
         self.conn.close()
 
 
