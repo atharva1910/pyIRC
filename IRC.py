@@ -12,6 +12,7 @@ threads = []
 port = 8080
 host = ""
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+lock = threading.Lock()
 # Reuse the same port without waiting for the OS
 sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 try:
@@ -48,7 +49,7 @@ def updateAll():
     """
         Send the new connID and nick to all the users
     """
-    message = "HEllO"
+    message = "HEllO\n"
     for key in userDict.values():
         key.send(message.encode("utf-8"))
 
@@ -58,6 +59,7 @@ def delAll(self, connID, nick):
     for key in self.userDict.items():
         self.sock.send(key, message.encode("utf-8"))
 
+
 # ------------------------- #
 #      Client class
 # ------------------------- #
@@ -65,11 +67,12 @@ def delAll(self, connID, nick):
 
 class connection(threading.Thread):
 
-    def __init__(self, conn, addr):
+    def __init__(self, conn, addr, lock):
         threading.Thread.__init__(self)
         self.conn = conn
         self.dict = {}
         self.addr = addr
+        self.lock = lock
         self.nick = None
         self.user = None
 
@@ -85,11 +88,15 @@ class connection(threading.Thread):
                 self.clean()
                 break
 
-            if len(data.split()) == 4 and data.split()[0] == ":USER":
-                self.user = data.split()[1].rstrip('\r\n')
-                if data.split()[2] == ":NICK":
+            if len(data.split()) == 4:
+                if data.split()[0] == ":USER" and data.split()[2] == ":NICK":
+                    self.user = data.split()[1].rstrip('\r\n')
                     self.nick = data.split()[3].rstrip('\r\n')
-                userAppend(self.conn, self.nick)
+                self.lock.acquire()
+                try:
+                    userAppend(self.conn, self.nick)
+                finally:
+                    self.lock.release()
                 message = "{} has joined the room\n".format(self.nick)
                 self.dataSend(message)
 
@@ -103,7 +110,11 @@ class connection(threading.Thread):
                 self.user = data.split()[1].rstrip('\r\n')
 
             if data.split()[0] == ":SENDALL":
-                updateAll()
+                self.lock.acquire()
+                try:
+                    updateAll()
+                finally:
+                    self.lock.release()
 
             print(data.rstrip('\r\n'))
 
@@ -119,7 +130,7 @@ while(True):
     try:
         sock.listen(10)
         conn, addr = sock.accept()
-        child = connection(conn, addr)
+        child = connection(conn, addr, lock)
         child.start()
         threads.append(child)
     except KeyboardInterrupt:
