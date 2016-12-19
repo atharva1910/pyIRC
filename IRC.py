@@ -92,28 +92,22 @@ class connection(threading.Thread):
                     self.user = data.split()[1].rstrip('\r\n')
                     self.nick = data.split()[3].rstrip('\r\n')
                     message = "{} has joined the room\n".format(self.nick)
-                    sendAll(self.nick, message)
                     self.lock.acquire()
                     try:
+                        sendAll(self.nick, message)
                         userAppend(self.conn, self.nick)
                     finally:
                         self.lock.release()
+                    continue
 
-            if (not self.nick or not self.user):
+            if not self.nick or not self.user:
                 message = "Enter username and nick please\nUSAGE ->"\
                           ":USER <username> :NICK <nickname> \n"
                 self.dataSend(message)
                 continue
-
-            if data.split()[0] == ":USER":
-                self.user = data.split()[1].rstrip('\r\n')
-
-            if data.split()[0] == ":SENDALL":
-                self.lock.acquire()
-                try:
-                    sendAll(self.nick)
-                finally:
-                    self.lock.release()
+            else:
+                message = "{} : ".format(self.nick) + data
+                sendAll(self.nick, message)
 
             print(data.rstrip('\r\n'))
 
@@ -132,11 +126,12 @@ class connection(threading.Thread):
         self.conn.close()
 
 
-while(True):
-    try:
-        sock.listen(10)
-        conn, addr = sock.accept()
-        child = connection(conn, addr, lock)
-        child.start()
-    except KeyboardInterrupt:
-        sock.close()
+if __name__ == "__main__":
+    while(True):
+        try:
+            sock.listen(10)
+            conn, addr = sock.accept()
+            child = connection(conn, addr, lock)
+            child.start()
+        except KeyboardInterrupt:
+            sock.close()
