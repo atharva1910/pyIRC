@@ -2,7 +2,6 @@ import socket
 import sys
 import threading
 
-
 # -------------------- #
 #   GLOBAL VARIABLES
 # -------------------- #
@@ -10,8 +9,8 @@ import threading
 # contains the information about all the users and their ID
 # key = nickname
 # value = conn socket
-userDict = {}
 
+userDict = {}
 port = 8080
 host = ""
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,22 +37,12 @@ def userDel(nick):
     del userDict[nick]
 
 
-# for debugging
-def printDict():
-    for i in userDict.keys():
-        print(i, userDict[i])
-
-
 def sendAll(nick, message):
-    """
-    Relays the messages to all the users.
-    """
     for key in userDict.keys():
         if key == nick:
             continue
         else:
             userDict[key].send(message.encode("utf-8"))
-
 
 # ------------------------- #
 #      Client class
@@ -65,7 +54,6 @@ class connection(threading.Thread):
     def __init__(self, conn, addr, lock):
         threading.Thread.__init__(self)
         self.conn = conn
-        self.dict = {}
         self.addr = addr
         self.lock = lock
         self.nick = None
@@ -87,17 +75,35 @@ class connection(threading.Thread):
                 self.clean(self.nick)
                 break
 
+            if data.rstrip('\r\n') == "tsk":
+                self.dataSend("WTF")
+
             if len(data.split()) == 4:
                 if data.split()[0] == ":USER" and data.split()[2] == ":NICK":
                     self.user = data.split()[1].rstrip('\r\n')
                     self.nick = data.split()[3].rstrip('\r\n')
+                self.lock.acquire()
+                if self.nick in userDict.keys():
+                    self.lock.release()
+                    message = "{} already taken \n".format(self.nick)
+                    self.nick = None
+                    self.dataSend(message)
+                    continue
+                else:
                     message = "{} has joined the room\n".format(self.nick)
-                    self.lock.acquire()
-                    try:
-                        sendAll(self.nick, message)
-                        userAppend(self.conn, self.nick)
-                    finally:
-                        self.lock.release()
+                try:
+                    sendAll(self.nick, message)
+                    userAppend(self.conn, self.nick)
+                finally:
+                    self.lock.release()
+                continue
+
+            if len(data.split()) > 2:
+                if data.split()[0] == "UPDATE:":
+                    self.dataSend(data.split()[0])
+                    nick = data.split()[1]
+                    conn = data.split()[2].rstrip('\r\n')
+                    self.connDict[nick] = conn
                     continue
 
             if not self.nick or not self.user:
@@ -109,8 +115,6 @@ class connection(threading.Thread):
                 message = "{} : ".format(self.nick) + data
                 sendAll(self.nick, message)
 
-            print(data.rstrip('\r\n'))
-
     def dataSend(self, data):
         self.conn.send(data.encode("utf-8"))
 
@@ -121,9 +125,13 @@ class connection(threading.Thread):
         """
         if nick:
             message = "{} has left the channel\n".format(nick)
-            userDel(nick)
-            sendAll(nick, message)
-        self.conn.close()
+            self.lock.acquire()
+            try:
+                userDel(nick)
+            finally:
+                self.lock.release()
+                sendAll(self.nick, message)
+            self.conn.close()
 
 
 if __name__ == "__main__":
