@@ -37,6 +37,16 @@ def userDel(nick):
     del userDict[nick]
 
 
+def listAll(nick, conn):
+    message = "A list of all nicknames\n"
+    for key in userDict.keys():
+        if key == nick:
+            continue
+        else:
+            message = "{}{}\n".format(message, key)
+    conn.sendall(message.encode("utf-8"))
+
+
 def sendAll(nick, message):
     for key in userDict.keys():
         if key == nick:
@@ -75,9 +85,6 @@ class connection(threading.Thread):
                 self.clean(self.nick)
                 break
 
-            if data.rstrip('\r\n') == "tsk":
-                self.dataSend("WTF")
-
             if len(data.split()) == 4:
                 if data.split()[0] == ":USER" and data.split()[2] == ":NICK":
                     self.user = data.split()[1].rstrip('\r\n')
@@ -98,13 +105,9 @@ class connection(threading.Thread):
                     self.lock.release()
                 continue
 
-            if len(data.split()) > 2:
-                if data.split()[0] == "UPDATE:":
-                    self.dataSend(data.split()[0])
-                    nick = data.split()[1]
-                    conn = data.split()[2].rstrip('\r\n')
-                    self.connDict[nick] = conn
-                    continue
+            if data.split()[0] == ":LIST":
+                listAll(self.nick, self.conn)
+                continue
 
             if not self.nick or not self.user:
                 message = "Enter username and nick please\nUSAGE ->"\
@@ -114,6 +117,7 @@ class connection(threading.Thread):
             else:
                 message = "{} : ".format(self.nick) + data
                 sendAll(self.nick, message)
+
 
     def dataSend(self, data):
         self.conn.send(data.encode("utf-8"))
