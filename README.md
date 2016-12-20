@@ -7,7 +7,7 @@ Sends a message to all users when a user leaves
 # Usage
 All the server specific commands start with ":"
 
-Register user -> :USER <username> :NICK <nickname>
+Register user -> ":USER <username> :NICK <nickname>"
 
 Quit server -> :quit
 
