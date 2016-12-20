@@ -1,7 +1,10 @@
 ### A Simple IRC server in python
 Does not allow same nicknames between users
+
 Cannot send messages until the user has regestired
-Sends a message to all users when a new user has joined in 
+
+Sends a message to all users when a new user has joined in
+
 Sends a message to all users when a user leaves
   
 # Usage
